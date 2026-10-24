@@ -1,0 +1,8 @@
+/dist/
+/artifacts/
+/repodock
+/repodock.exe
+*.test
+.DS_Store
+/.mygo/
+__pycache__/

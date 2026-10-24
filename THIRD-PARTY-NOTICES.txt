@@ -1,0 +1,16 @@
+RepoDock uses the following independently licensed components:
+
+MyGO v0.5.5 -- MIT -- https://github.com/egoist/mygo
+purego v0.11.1 -- Apache-2.0 -- https://github.com/ebitengine/purego
+go-text/typesetting v0.3.5 -- MIT and Unlicense -- https://github.com/go-text/typesetting
+golang.org/x/image v0.46.0 -- BSD-3-Clause -- https://pkg.go.dev/golang.org/x/image
+golang.org/x/text v0.43.0 -- BSD-3-Clause -- https://pkg.go.dev/golang.org/x/text
+golang.org/x/sys v0.49.0 -- BSD-3-Clause -- https://pkg.go.dev/golang.org/x/sys
+Go 1.27.1 runtime and standard library -- BSD-3-Clause -- https://go.dev/LICENSE
+
+Complete license texts are included in the adjacent licenses directory.
+Git, GitHub CLI and Codex are separate user-installed applications.
+
+The Codex workspace deep-link behavior and visual direction were informed by
+Silverwing (MIT): https://github.com/javatoai/silverwing
+RepoDock's implementation is independent; no Silverwing source is bundled.

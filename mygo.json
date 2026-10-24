@@ -1,0 +1,10 @@
+{
+  "name": "RepoDock",
+  "identifier": "app.repodock.desktop",
+  "version": "0.1.0",
+  "main": "./cmd/repodock",
+  "icon": "assets/icon.png",
+  "out": "dist/native",
+  "resources": ["LICENSE", "THIRD-PARTY-NOTICES.txt", "licenses"],
+  "macos": {"minimumSystemVersion": "12.0"}
+}
