@@ -19,13 +19,13 @@ func TestRepositoryURLNormalization(t *testing.T) {
 	}
 }
 
-func TestRecentProjectsDeduplicateAndLimit(t *testing.T) {
+func TestOpenedProjectsDeduplicateWithoutTruncation(t *testing.T) {
 	p := DefaultPreferences()
 	for i := range 25 {
 		p.Remember(RecentProject{Path: fmt.Sprint(i)})
 	}
 	p.Remember(RecentProject{Path: "10", FullName: "you/reopened"})
-	if len(p.Recent) != 20 || p.Recent[0].FullName != "you/reopened" {
+	if len(p.Recent) != 25 || p.Recent[0].FullName != "you/reopened" || len(p.LocalProjects) != 25 {
 		t.Fatal(p.Recent)
 	}
 	count := 0

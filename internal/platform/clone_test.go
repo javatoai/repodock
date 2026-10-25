@@ -33,7 +33,10 @@ func localRemote(t *testing.T) (string, string) {
 	if err := os.WriteFile(filepath.Join(seed, "README.md"), []byte("local fixture\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	run("-C", seed, "add", "README.md")
+	if err := os.WriteFile(filepath.Join(seed, ".gitattributes"), []byte("*.md text eol=lf\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run("-C", seed, "add", "README.md", ".gitattributes")
 	run("-C", seed, "commit", "-m", "fixture")
 	run("-C", seed, "push", remote, "main")
 	run("--git-dir", remote, "symbolic-ref", "HEAD", "refs/heads/main")

@@ -10,7 +10,7 @@ func applyTheme(c *ui.Context, preference string) palette {
 	dark := preference == "dark" || (preference == "system" && c.Theme().Dark)
 	p := palette{
 		ui.Hex("#F4F7FB"), ui.Hex("#FFFFFF"), ui.Hex("#F7F9FC"), ui.Hex("#E4EAF2"), ui.Hex("#182338"),
-		ui.Hex("#768397"), ui.Hex("#356AE6"), ui.Hex("#EBF1FF"), ui.Hex("#22805A"), ui.Hex("#CF4557"),
+		ui.Hex("#626E80"), ui.Hex("#356AE6"), ui.Hex("#EBF1FF"), ui.Hex("#22805A"), ui.Hex("#CF4557"),
 	}
 	t := ui.LightTheme()
 	if dark {
@@ -31,6 +31,9 @@ func applyTheme(c *ui.Context, preference string) palette {
 }
 
 var iconPaths = map[string]string{
+	"home":     `<path d="m3 10 9-7 9 7v11h-6v-7H9v7H3z"/>`,
+	"search":   `<circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/>`,
+	"more":     `<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>`,
 	"dock":     `<path d="M4 17v3h16v-3M12 3v12m-5-5 5 5 5-5"/>`,
 	"repo":     `<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 3v18m4-13h3m-3 4h3"/>`,
 	"github":   `<path d="M9 19c-4 1-4-2-6-2m12 5v-4c0-1-.3-2-1-2 4-.5 7-2 7-6a5 5 0 0 0-1-3 5 5 0 0 0 0-4s-1-1-4 2a14 14 0 0 0-8 0C5 2 4 3 4 3a5 5 0 0 0 0 4 5 5 0 0 0-1 3c0 4 3 5.5 7 6-.7 0-1 1-1 2v4"/>`,

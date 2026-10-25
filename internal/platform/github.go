@@ -54,15 +54,15 @@ func ownerPatternForAccount(login string) bool {
 	return err == nil
 }
 
-func (g *GitHub) ListPrivate(ctx context.Context, account string, page func([]domain.Repository)) error {
+func (g *GitHub) ListRepositories(ctx context.Context, account string, page func([]domain.Repository)) error {
 	for number := 1; ; number++ {
 		pageCtx, cancel := context.WithTimeout(ctx, 45*time.Second)
 		data, err := g.Runner.Run(pageCtx, g.command("api", "--hostname", "github.com", "--method", "GET", "user/repos",
-			"-f", "affiliation=owner", "-f", "visibility=private", "-f", "sort=updated", "-f", "direction=desc",
+			"-f", "affiliation=owner", "-f", "visibility=all", "-f", "sort=updated", "-f", "direction=desc",
 			"-f", "per_page=100", "-f", "page="+strconv.Itoa(number)), nil)
 		cancel()
 		if err != nil {
-			return fmt.Errorf("私人仓库尚未加载完整：%w", err)
+			return fmt.Errorf("仓库尚未加载完整：%w", err)
 		}
 		var rows []struct {
 			Name      string    `json:"name"`
@@ -80,14 +80,11 @@ func (g *GitHub) ListPrivate(ctx context.Context, account string, page func([]do
 			if !strings.EqualFold(row.Owner.Login, account) {
 				return ErrAccountChanged
 			}
-			if !row.Private {
-				continue
-			}
 			ref, err := domain.ParseRepository("https://github.com/" + row.Owner.Login + "/" + row.Name)
 			if err != nil {
 				return fmt.Errorf("GitHub 返回了无效仓库名称")
 			}
-			repositories = append(repositories, domain.Repository{Ref: ref, UpdatedAt: row.UpdatedAt})
+			repositories = append(repositories, domain.Repository{Ref: ref, UpdatedAt: row.UpdatedAt, Private: row.Private})
 		}
 		slices.SortStableFunc(repositories, func(a, b domain.Repository) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
 		page(repositories)

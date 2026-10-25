@@ -13,13 +13,27 @@ type Dependencies struct {
 	GHPath  string
 	GitErr  error
 	GHErr   error
+	Proxy   domain.ProxyConfig
+}
+
+type TargetInspector interface {
+	Inspect(context.Context, domain.RepositoryRef, string) domain.CloneTarget
+}
+
+type ProxyTester interface {
+	Test(context.Context, domain.ProxyConfig) error
 }
 
 type GitHub interface {
 	Account(context.Context) (string, error)
-	// ListPrivate calls page only with repositories of the confirmed account.
+	// ListRepositories calls page only with repositories of the confirmed account.
 	// A final error leaves already delivered pages available as an incomplete list.
-	ListPrivate(ctx context.Context, account string, page func([]domain.Repository)) error
+	ListRepositories(ctx context.Context, account string, page func([]domain.Repository)) error
+}
+
+type Publisher interface {
+	Inspect(context.Context, domain.PublishRequest, string) ([]string, error)
+	Publish(context.Context, domain.PublishState, func(domain.PublishState) error, func(domain.Progress)) (domain.PublishState, error)
 }
 
 type Cloner interface {
@@ -47,8 +61,11 @@ type ToolResolver interface {
 }
 
 type Services struct {
-	GitHub GitHub
-	Cloner Cloner
+	GitHub      GitHub
+	Cloner      Cloner
+	Publisher   Publisher
+	Targets     TargetInspector
+	ProxyTester ProxyTester
 }
 
 type ServiceFactory func(Dependencies) Services

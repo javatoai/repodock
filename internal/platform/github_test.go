@@ -20,19 +20,19 @@ func (f runnerFunc) Run(ctx context.Context, cmd Command, output func(string)) (
 func repositoryPage(count, offset int) []byte {
 	rows := []map[string]any{}
 	for i := range count {
-		rows = append(rows, map[string]any{"name": fmt.Sprintf("repo-%03d", i+offset), "private": true, "owner": map[string]string{"login": "you"}, "updated_at": "2026-10-23T10:00:00Z"})
+		rows = append(rows, map[string]any{"name": fmt.Sprintf("repo-%03d", i+offset), "private": (i+offset)%2 == 0, "owner": map[string]string{"login": "you"}, "updated_at": "2026-10-23T10:00:00Z"})
 	}
 	data, _ := json.Marshal(rows)
 	return data
 }
 
-func TestGitHubPagesAllPrivateRepositories(t *testing.T) {
+func TestGitHubPagesAllOwnedRepositories(t *testing.T) {
 	pages := 0
 	g := GitHub{GHPath: "gh", Runner: runnerFunc(func(ctx context.Context, cmd Command, emit func(string)) ([]byte, error) {
 		if slices.Contains(cmd.Args, "user") {
 			return []byte(`{"login":"you"}`), nil
 		}
-		if !slices.Contains(cmd.Args, "affiliation=owner") || !slices.Contains(cmd.Args, "visibility=private") || !slices.Contains(cmd.Args, "per_page=100") {
+		if !slices.Contains(cmd.Args, "affiliation=owner") || !slices.Contains(cmd.Args, "visibility=all") || !slices.Contains(cmd.Args, "per_page=100") {
 			t.Fatal(cmd.Args)
 		}
 		pages++
@@ -45,9 +45,12 @@ func TestGitHubPagesAllPrivateRepositories(t *testing.T) {
 		return repositoryPage(1, 100), nil
 	})}
 	var repos []domain.Repository
-	err := g.ListPrivate(context.Background(), "you", func(page []domain.Repository) { repos = append(repos, page...) })
+	err := g.ListRepositories(context.Background(), "you", func(page []domain.Repository) { repos = append(repos, page...) })
 	if err != nil || len(repos) != 101 || pages != 2 {
 		t.Fatal(len(repos), pages, err)
+	}
+	if !repos[0].Private || repos[1].Private {
+		t.Fatal("public/private metadata lost")
 	}
 }
 
@@ -60,7 +63,7 @@ func TestGitHubFailureKeepsPartialListIncomplete(t *testing.T) {
 		}
 		return nil, errors.New("HTTP 403")
 	})}
-	err := g.ListPrivate(context.Background(), "you", func(p []domain.Repository) { delivered += len(p) })
+	err := g.ListRepositories(context.Background(), "you", func(p []domain.Repository) { delivered += len(p) })
 	if err == nil || delivered != 100 || !strings.Contains(err.Error(), "未加载完整") {
 		t.Fatal(delivered, err)
 	}
@@ -73,7 +76,7 @@ func TestGitHubDetectsAccountSwitch(t *testing.T) {
 		}
 		return repositoryPage(1, 0), nil
 	})}
-	if err := g.ListPrivate(context.Background(), "you", func([]domain.Repository) {}); !errors.Is(err, ErrAccountChanged) {
+	if err := g.ListRepositories(context.Background(), "you", func([]domain.Repository) {}); !errors.Is(err, ErrAccountChanged) {
 		t.Fatal(err)
 	}
 }

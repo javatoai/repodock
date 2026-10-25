@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"repodock/internal/domain"
-	"runtime"
 	"strconv"
 	"strings"
 )
@@ -24,25 +23,19 @@ type Cloner struct {
 func getPath() string { return os.Getenv("PATH") }
 
 func (s *Cloner) Clone(ctx context.Context, ref domain.RepositoryRef, parent string, report func(domain.Progress)) (result string, resultErr error) {
-	checked, err := domain.ParseRepository(ref.URL())
-	if err != nil || checked != ref {
-		return "", fmt.Errorf("仓库地址无效")
-	}
-	if runtime.GOOS == "windows" && !validWindowsName(ref.Name) {
-		return "", fmt.Errorf("仓库名不能作为 Windows 文件夹名")
-	}
-	if !filepath.IsAbs(parent) {
-		return "", fmt.Errorf("请选择绝对路径的保存文件夹")
+	target, err := CloneTargetPath(ref, parent)
+	if err != nil {
+		return "", err
 	}
 	parent = filepath.Clean(parent)
 	if info, err := os.Stat(parent); err != nil || !info.IsDir() {
 		return "", fmt.Errorf("保存文件夹不存在或无法访问")
 	}
-	target := filepath.Join(parent, ref.Name)
-	if _, err := os.Lstat(target); err == nil {
+	targetStatus := (TargetInspector{}).Inspect(ctx, ref, parent)
+	if targetStatus.State == "exists" || targetStatus.State == "file" {
 		return "", ErrDestinationExists
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return "", fmt.Errorf("检查目标目录：%w", err)
+	} else if targetStatus.State != "ready" {
+		return "", fmt.Errorf("%s", targetStatus.Message)
 	}
 	stage, err := os.MkdirTemp(parent, ".repodock-"+ref.Name+"-")
 	if err != nil {

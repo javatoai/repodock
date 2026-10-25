@@ -46,7 +46,7 @@ func (g githubStub) Account(ctx context.Context) (string, error) {
 	}
 	return "you", nil
 }
-func (g githubStub) ListPrivate(ctx context.Context, a string, page func([]domain.Repository)) error {
+func (g githubStub) ListRepositories(ctx context.Context, a string, page func([]domain.Repository)) error {
 	if g.list != nil {
 		return g.list(ctx, a, page)
 	}
@@ -148,7 +148,7 @@ func TestControllerSuccessfulCloneOpenFailureAndRecordRemoval(t *testing.T) {
 	await(t, c, changed, func(m Model) bool { return m.Complete })
 	c.BeginClone("https://github.com/you/project")
 	m := await(t, c, changed, func(m Model) bool { return m.Task.Status == "success" })
-	if len(m.Preferences.Recent) != 1 || m.Preferences.Recent[0].Path != path {
+	if len(m.Preferences.Recent) != 0 || len(m.Preferences.LocalProjects) != 1 || m.Preferences.LocalProjects[0].Path != path {
 		t.Fatal(m.Preferences.Recent)
 	}
 	c.OpenProject(path, false)

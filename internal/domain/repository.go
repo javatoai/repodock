@@ -3,7 +3,11 @@ package domain
 import (
 	"fmt"
 	"net/url"
+	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
+	"slices"
 	"strings"
 	"time"
 )
@@ -52,33 +56,107 @@ func ParseRepository(raw string) (RepositoryRef, error) {
 type Repository struct {
 	Ref       RepositoryRef
 	UpdatedAt time.Time
+	Private   bool
 }
 
 type RecentProject struct {
 	FullName     string    `json:"fullName"`
 	Path         string    `json:"path"`
 	LastOpenedAt time.Time `json:"lastOpenedAt"`
+	PreparedAt   time.Time `json:"preparedAt,omitempty"`
 }
 
 type Preferences struct {
-	Version    int             `json:"version"`
-	Theme      string          `json:"theme"`
-	GitPath    string          `json:"gitPath,omitempty"`
-	GHPath     string          `json:"ghPath,omitempty"`
-	LastParent string          `json:"lastParent,omitempty"`
-	Recent     []RecentProject `json:"recent"`
+	Version         int             `json:"version"`
+	Theme           string          `json:"theme"`
+	GitPath         string          `json:"gitPath,omitempty"`
+	GHPath          string          `json:"ghPath,omitempty"`
+	LastParent      string          `json:"lastParent,omitempty"`
+	DefaultCloneDir string          `json:"defaultCloneDir,omitempty"`
+	LocalProjects   []RecentProject `json:"localProjects,omitempty"`
+	Publication     *PublishState   `json:"publication,omitempty"`
+	Recent          []RecentProject `json:"recent"`
+	Proxy           ProxyConfig     `json:"proxy"`
 }
 
-func DefaultPreferences() Preferences { return Preferences{Version: 1, Theme: "system"} }
+func DefaultPreferences() Preferences {
+	return Preferences{Version: 3, Theme: "system", Proxy: DefaultProxy()}
+}
 
 func (p *Preferences) Remember(project RecentProject) {
 	next := []RecentProject{project}
 	for _, old := range p.Recent {
-		if old.Path != project.Path && len(next) < 20 {
+		if !SamePath(old.Path, project.Path) {
 			next = append(next, old)
 		}
 	}
 	p.Recent = next
+	slices.SortStableFunc(p.Recent, func(a, b RecentProject) int { return b.LastOpenedAt.Compare(a.LastOpenedAt) })
+	p.RememberLocal(project)
+}
+
+func SamePath(a, b string) bool {
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+func (p *Preferences) RememberLocal(project RecentProject) {
+	for i, old := range p.LocalProjects {
+		if SamePath(old.Path, project.Path) {
+			if project.LastOpenedAt.IsZero() {
+				project.LastOpenedAt = old.LastOpenedAt
+			}
+			if project.PreparedAt.IsZero() {
+				project.PreparedAt = old.PreparedAt
+			}
+			p.LocalProjects[i] = project
+			p.SortLocalProjects()
+			return
+		}
+	}
+	p.LocalProjects = append(p.LocalProjects, project)
+	p.SortLocalProjects()
+}
+
+func (p *Preferences) SortLocalProjects() {
+	slices.SortStableFunc(p.LocalProjects, func(a, b RecentProject) int {
+		left, right := a.PreparedAt, b.PreparedAt
+		if left.IsZero() {
+			left = a.LastOpenedAt
+		}
+		if right.IsZero() {
+			right = b.LastOpenedAt
+		}
+		return right.Compare(left)
+	})
+}
+
+// 兼容旧配置：历史记录保留，默认目录不再随单次克隆改变。
+func (p *Preferences) Normalize() {
+	if p.Proxy.URL == "" {
+		p.Proxy.URL = DefaultProxyURL
+	}
+	if p.DefaultCloneDir == "" {
+		p.DefaultCloneDir = p.LastParent
+		if p.DefaultCloneDir == "" {
+			if home, err := os.UserHomeDir(); err == nil {
+				p.DefaultCloneDir = filepath.Join(home, "Projects")
+			}
+		}
+	}
+	for _, project := range p.Recent {
+		p.RememberLocal(project)
+	}
+	for i := range p.LocalProjects {
+		if p.LocalProjects[i].PreparedAt.IsZero() {
+			p.LocalProjects[i].PreparedAt = p.LocalProjects[i].LastOpenedAt
+		}
+	}
+	p.SortLocalProjects()
+	slices.SortStableFunc(p.Recent, func(a, b RecentProject) int { return b.LastOpenedAt.Compare(a.LastOpenedAt) })
 }
 
 type Progress struct {

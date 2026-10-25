@@ -1,27 +1,53 @@
 package desktop
 
 import (
+	"fmt"
+	"net"
+	"net/url"
+	"path/filepath"
 	"repodock/internal/application"
+	"repodock/internal/domain"
+	"strings"
 
 	"github.com/egoist/mygo/ui"
 )
 
 func (v *View) openSettings(m application.Model) {
-	v.gitPath, v.ghPath = m.Preferences.GitPath, m.Preferences.GHPath
-	v.SettingsOpen = true
+	if !v.settingsInitialized {
+		v.gitPath, v.ghPath = m.Preferences.GitPath, m.Preferences.GHPath
+		v.defaultDir = m.Preferences.DefaultCloneDir
+		v.proxyEnabled = m.Preferences.Proxy.Enabled
+		proxy, err := domain.NormalizeProxy(m.Preferences.Proxy)
+		if err != nil {
+			proxy = domain.DefaultProxy()
+		}
+		u, _ := url.Parse(proxy.URL)
+		v.proxyHost, v.proxyPort = u.Hostname(), u.Port()
+		switch u.Scheme {
+		case "https":
+			v.proxyProtocol = 1
+		case "socks5":
+			v.proxyProtocol = 2
+		}
+		v.settingsInitialized = true
+	}
+	v.Page = "settings"
 }
 
-func (v *View) settings(c *ui.Context, m application.Model, p palette) {
-	ui.DialogBase(c.Key("settings-dialog"), &v.SettingsOpen, func(backdrop, panel ui.Element) {
-		backdrop.Background(ui.RGBA(0, 0, 0, 0.34))
-		panel.Width(500).MaxWidthPercent(92).MaxHeightPercent(90).Padding(24).Gap(18).Radius(18).Background(p.surface).Border(1, p.line)
-		ui.Row(c).Children(func() {
-			ui.Text(c, "设置").FontSize(20).Bold().Grow(1).TextColor(p.text)
-			if iconButton(c, "settings-close", "close", "关闭设置", p, false) {
-				v.SettingsOpen = false
-			}
-		})
-		ui.Scroll(c.Key("settings-content")).MaxHeight(420).Gap(17).Children(func() {
+func (v *View) settingsPage(c *ui.Context, m application.Model, p palette) {
+	ui.Column(c.Key("settings-page")).Grow(1).FillWidth().MaxWidth(680).AlignSelf(ui.Center).Gap(18).Children(func() {
+		ui.Text(c, "设置").FontSize(20).Bold().TextColor(p.text)
+		ui.Scroll(c.Key("settings-content")).Grow(1).TrackScroll(&v.settingsScroll).Gap(17).Children(func() {
+			ui.Column(c).Gap(8).Children(func() {
+				ui.Text(c, "默认项目目录").FontSize(13).Bold().TextColor(p.text)
+				ui.Row(c).Gap(8).Children(func() {
+					ui.TextInput(c.Key("default-project-dir"), &v.defaultDir).Grow(1).Label("默认项目目录").FontSize(12).Disabled(m.Task.Busy())
+					if ui.Button(c.Key("choose-default-dir"), "选择").Disabled(m.Task.Busy() || v.picking).Clicked() {
+						v.chooseDirectory(v.defaultDir, func(path string) { v.defaultDir = path })
+					}
+				})
+			})
+			ui.Divider(c)
 			ui.Column(c).Gap(9).Children(func() {
 				ui.Text(c, "外观").FontSize(12).Bold().TextColor(p.muted)
 				index := 0
@@ -34,6 +60,8 @@ func (v *View) settings(c *ui.Context, m application.Model, p palette) {
 					v.Backend.SetTheme([]string{"system", "light", "dark"}[index])
 				}
 			})
+			ui.Divider(c)
+			v.proxySettings(c, m, p)
 			ui.Divider(c)
 			v.toolSetting(c, "Git", "Git 可执行文件", &v.gitPath, m.Dependencies.GitPath, m.Dependencies.GitErr, "https://git-scm.com/downloads", p, m.Task.Busy())
 			v.toolSetting(c, "GitHub CLI", "GitHub CLI 可执行文件", &v.ghPath, m.Dependencies.GHPath, m.Dependencies.GHErr, "https://cli.github.com/", p, m.Task.Busy())
@@ -77,10 +105,53 @@ func (v *View) settings(c *ui.Context, m application.Model, p palette) {
 		})
 		ui.Row(c).Justify(ui.End).Children(func() {
 			if button(c, "save-settings", "check", "保存并检测", p, true, m.Task.Busy()) {
-				v.Backend.ApplyTools(v.gitPath, v.ghPath)
-				v.SettingsOpen = false
+				if !filepath.IsAbs(strings.TrimSpace(v.defaultDir)) {
+					v.Backend.ReportError(fmt.Errorf("默认项目目录必须是绝对路径"))
+					return
+				}
+				proxy, err := domain.NormalizeProxy(v.proxyDraft())
+				if err != nil {
+					v.Backend.ReportError(err)
+					return
+				}
+				v.Backend.ApplySettings(v.gitPath, v.ghPath, v.defaultDir, proxy)
 			}
 		})
+	})
+}
+
+func (v *View) proxyDraft() domain.ProxyConfig {
+	return domain.ProxyConfig{Enabled: v.proxyEnabled, URL: []string{"http", "https", "socks5"}[v.proxyProtocol] + "://" + net.JoinHostPort(strings.TrimSpace(v.proxyHost), strings.TrimSpace(v.proxyPort))}
+}
+
+func (v *View) proxySettings(c *ui.Context, m application.Model, p palette) {
+	busy := m.Task.Busy()
+	ui.Column(c.Key("proxy-settings")).Gap(10).Children(func() {
+		ui.Row(c).Gap(10).Children(func() {
+			ui.Text(c, "网络代理").FontSize(13).Bold().TextColor(p.text).Grow(1)
+			ui.Switch(c.Key("proxy-enabled"), &v.proxyEnabled).Label("启用网络代理").Disabled(busy)
+		})
+		ui.Segmented(c.Key("proxy-protocol"), &v.proxyProtocol, "HTTP", "HTTPS", "SOCKS5").Label("代理协议").Disabled(busy)
+		ui.Row(c).Gap(8).Children(func() {
+			ui.TextInput(c.Key("proxy-host"), &v.proxyHost).Grow(1).Label("代理主机").Placeholder("127.0.0.1").FontSize(12).Disabled(busy)
+			ui.TextInput(c.Key("proxy-port"), &v.proxyPort).Width(80).Label("代理端口").Placeholder("7897").FontSize(12).Disabled(busy)
+			if ui.Button(c.Key("proxy-test"), "测试连接").Disabled(busy || m.ProxyTest.Loading).Clicked() {
+				v.Backend.TestProxy(v.proxyDraft())
+			}
+		})
+		draft, err := domain.NormalizeProxy(v.proxyDraft())
+		if err == nil && m.ProxyTest.Config == draft {
+			message, color := m.ProxyTest.Message, p.success
+			if m.ProxyTest.Loading {
+				message, color = "正在连接 GitHub API…", p.muted
+			}
+			if m.ProxyTest.Error != "" {
+				message, color = shortError(m.ProxyTest.Error), p.danger
+			}
+			if message != "" {
+				ui.Text(c, message).FontSize(11).TextColor(color).Tooltip(m.ProxyTest.Error)
+			}
+		}
 	})
 }
 

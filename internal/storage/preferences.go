@@ -31,7 +31,7 @@ func (s *Preferences) Load() (domain.Preferences, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	p := domain.DefaultPreferences()
-	f, err := os.Open(s.Path)
+	f, err := openPreferences(s.Path)
 	if errors.Is(err, os.ErrNotExist) {
 		return p, nil
 	}
@@ -45,15 +45,14 @@ func (s *Preferences) Load() (domain.Preferences, error) {
 		s.invalid = true
 		return p, fmt.Errorf("设置文件损坏，将在下次保存前保留备份：%w", err)
 	}
-	if saved.Version != 1 {
+	if saved.Version < 1 || saved.Version > 3 {
 		return p, fmt.Errorf("不支持设置文件版本 %d，请使用匹配版本的 RepoDock", saved.Version)
 	}
 	if saved.Theme != "system" && saved.Theme != "light" && saved.Theme != "dark" {
 		saved.Theme = "system"
 	}
-	if len(saved.Recent) > 20 {
-		saved.Recent = saved.Recent[:20]
-	}
+	saved.Normalize()
+	saved.Version = 3
 	return saved, nil
 }
 
@@ -75,11 +74,11 @@ func (s *Preferences) Save(p domain.Preferences) error {
 		var version struct {
 			Version int `json:"version"`
 		}
-		if json.Unmarshal(raw, &version) == nil && version.Version != 1 {
+		if json.Unmarshal(raw, &version) == nil && (version.Version < 1 || version.Version > 3) {
 			return fmt.Errorf("设置版本不匹配，未覆盖原文件")
 		}
 	}
-	p.Version = 1
+	p.Version = 3
 	data, err := json.MarshalIndent(p, "", "  ")
 	if err != nil {
 		return err
@@ -100,7 +99,7 @@ func (s *Preferences) Save(p domain.Preferences) error {
 	if closeErr != nil {
 		return closeErr
 	}
-	if err := os.Rename(tmp, s.Path); err != nil {
+	if err := replaceFile(tmp, s.Path); err != nil {
 		return fmt.Errorf("保存设置：%w", err)
 	}
 	return nil

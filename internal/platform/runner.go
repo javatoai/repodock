@@ -8,7 +8,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
+	"repodock/internal/domain"
 	"strings"
 	"sync"
 	"time"
@@ -25,17 +27,24 @@ type Runner interface {
 	Run(ctx context.Context, command Command, stderr func(string)) ([]byte, error)
 }
 
-type ExecRunner struct{}
+type ExecRunner struct {
+	Proxy   domain.ProxyConfig
+	GitPath string
+}
 
 // Run drains both pipes and waits for the entire child process tree to stop
 // before returning on cancellation, so the caller can safely remove staging.
-func (ExecRunner) Run(ctx context.Context, command Command, stderr func(string)) ([]byte, error) {
+func (r ExecRunner) Run(ctx context.Context, command Command, stderr func(string)) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	cmd := exec.CommandContext(ctx, command.Path, command.Args...)
+	args, env, err := r.prepare(command, os.Environ())
+	if err != nil {
+		return nil, err
+	}
+	cmd := exec.CommandContext(ctx, command.Path, args...)
 	cmd.Dir = command.Dir
-	cmd.Env = append(cleanEnvironment(os.Environ()), command.Env...)
+	cmd.Env = env
 	cmd.WaitDelay = 5 * time.Second
 	started, cleanup, err := prepareProcess(cmd)
 	if err != nil {
@@ -69,9 +78,56 @@ func (ExecRunner) Run(ctx context.Context, command Command, stderr func(string))
 		if detail == "" {
 			detail = err.Error()
 		}
+		if r.Proxy.Enabled {
+			detail = "代理 " + r.Proxy.URL + " 下命令失败：" + detail
+		}
 		return stdout.Bytes(), fmt.Errorf("%s", detail)
 	}
 	return stdout.Bytes(), nil
+}
+
+func (r ExecRunner) prepare(command Command, inherited []string) ([]string, []string, error) {
+	env := append(cleanEnvironment(inherited), command.Env...)
+	args := append([]string(nil), command.Args...)
+	if !r.Proxy.Enabled {
+		return args, env, nil
+	}
+	proxy, err := domain.NormalizeProxy(r.Proxy)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Strip every inherited spelling, including bypass rules and Git's command
+	// configuration. Configuration is scoped to this process and its children.
+	env = cleanEnvironment(env)
+	filtered := make([]string, 0, len(env)+16)
+	for _, entry := range env {
+		key, _, _ := strings.Cut(entry, "=")
+		switch strings.ToUpper(key) {
+		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
+			continue
+		}
+		filtered = append(filtered, entry)
+	}
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"} {
+		filtered = append(filtered, key+"="+proxy.URL)
+	}
+	filtered = append(filtered, "NO_PROXY=", "no_proxy=")
+	configs := []string{"http.proxy", "http.https://github.com/.proxy", "remote.origin.proxy"}
+	// A repository-specific proxy in a user's Git config must not bypass the
+	// selected endpoint. gh passes its clone URL through to the Git child.
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "https://github.com/") {
+			configs = append(configs, "http."+arg+".proxy")
+		}
+	}
+	filtered = append(filtered, fmt.Sprintf("GIT_CONFIG_COUNT=%d", len(configs)))
+	for i, key := range configs {
+		filtered = append(filtered, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, key), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, proxy.URL))
+	}
+	if (r.GitPath != "" && domain.SamePath(command.Path, r.GitPath)) || strings.EqualFold(filepath.Base(command.Path), "git") || strings.EqualFold(filepath.Base(command.Path), "git.exe") {
+		args = append([]string{"-c", "http.proxy=" + proxy.URL, "-c", "remote.origin.proxy=" + proxy.URL}, args...)
+	}
+	return args, filtered, nil
 }
 
 type limitedWriter struct {
