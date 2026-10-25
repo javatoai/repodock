@@ -1,6 +1,28 @@
 # RepoDock 项目交接
 
-更新日期：2026-10-25。本轮包含首页与本地项目流程改版、平铺设置、目录保护、代理支持及 README 更新；未发布安装包。
+更新日期：2026-10-25。本轮包含首页与本地项目流程改版、平铺设置、目录保护、代理支持及 README 更新；已发布 v0.1.0 和配套小红书图文帖。
+
+## 已发布版本与帖子
+
+| 项目 | 地址与状态 |
+| --- | --- |
+| GitHub Releases | [RepoDock v0.1.0](https://github.com/javatoai/repodock/releases/tag/v0.1.0)，已公开发布并设为 Latest |
+| 版本源码 | [a2332b6](https://github.com/javatoai/repodock/commit/a2332b6a028ca1c4b938ae4958cdd060af0cd077)，标签 v0.1.0 指向该提交 |
+| 构建验证 | [Native build #2](https://github.com/javatoai/repodock/actions/runs/40154571002)，Windows x64、macOS arm64／x64 的测试、go vet、预览、打包与产物上传全部成功 |
+| 小红书 | [VibeCoding:开源项目启动器](https://www.xiaohongshu.com/explore/6add6faf000000002c020d69)，2026-10-25 发布，已通过搜索和帖子详情回读核实 |
+
+发布附件：
+
+- [Windows x64 ZIP](https://github.com/javatoai/repodock/releases/download/v0.1.0/RepoDock-0.1.0-windows-amd64.zip)
+- [macOS Apple silicon ZIP](https://github.com/javatoai/repodock/releases/download/v0.1.0/RepoDock-0.1.0-macos-arm64.zip)
+- [macOS Intel ZIP](https://github.com/javatoai/repodock/releases/download/v0.1.0/RepoDock-0.1.0-macos-amd64.zip)
+- [SHA256SUMS.txt](https://github.com/javatoai/repodock/releases/download/v0.1.0/SHA256SUMS.txt)
+
+三个 ZIP 直接采用上述成功 CI 的产物，已核对 CI 校验值、平台架构、macOS 可执行权限，以及上传后 GitHub 返回的 SHA-256。macOS 包尚未经过 Apple 公证；公开发布不代表 macOS 实机运行或 Codex 实际聊天创建已经完成验收。
+
+小红书使用确认过的文案及三张示例界面图，顺序为“已克隆列表（首图）→ 首页搜索 → 创建项目”。发布脚本曾返回成功但未捕获平台回执，随后查到新帖子并回读详情，核对了标题、正文和三张配图；不可因该类回执缺失而直接重复发布。笔记 ID 为 6add6faf000000002c020d69，交接中不保存访问令牌或登录信息。
+
+当前机器的发布素材和校验记录保存在 artifacts/xiaohongshu/repodock-v0.1.0/ 与 artifacts/releases/v0.1.0/run-40154571002/；两者均为本地忽略目录，不随 Git 仓库分发。
 
 ## 产品与界面
 
@@ -78,4 +100,4 @@ go run ./cmd/repodock --config-dir ./artifacts/dev-config
 
 ## 后续交付
 
-核对真实私人/公开仓库权限、Windows/macOS 系统对话框、通过 RepoDock 实际创建与推送 GitHub 仓库、实际 Codex 新聊天及工作目录。安装包构建、签名、公证与正式发布均单独验证。
+v0.1.0 的三平台构建与 GitHub Releases 发布已完成。后续继续核对真实私人/公开仓库权限、Windows/macOS 系统对话框、通过 RepoDock 实际创建与推送 GitHub 仓库、实际 Codex 新聊天及工作目录；代码签名、公证与后续版本发布分别验证。
